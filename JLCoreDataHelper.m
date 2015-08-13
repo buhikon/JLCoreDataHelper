@@ -46,6 +46,13 @@ static JLCoreDataHelper *instance = nil;
 
 #pragma mark -get
 
+- (NSMutableArray *)getObjectsWithEntity:(NSString *)entityName
+{
+    return [self getObjectsWithCondition:nil
+                             sortingKeys:nil
+                               ascending:YES
+                                  entity:entityName];
+}
 - (NSMutableArray *)getObjectsWithCondition:(NSString *)condition
                                 sortingKeys:(NSArray *)skeys
                                      entity:(NSString *)entityName
@@ -276,11 +283,15 @@ static JLCoreDataHelper *instance = nil;
     
     _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
     NSURL *storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.sqlite", self.dataModelName]];
+    NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
+                             [NSNumber numberWithBool:YES], NSMigratePersistentStoresAutomaticallyOption,
+                             [NSNumber numberWithBool:YES], NSInferMappingModelAutomaticallyOption,
+                             nil];
     NSError *error = nil;
     if (![_persistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType
                                                    configuration:nil
                                                              URL:storeURL
-                                                         options:nil
+                                                         options:options
                                                            error:&error]) {
         // Report any error we got.
         NSMutableDictionary *dict = [NSMutableDictionary dictionary];

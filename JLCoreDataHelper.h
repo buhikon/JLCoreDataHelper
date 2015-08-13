@@ -25,6 +25,7 @@
 - (NSURL *)applicationDocumentsDirectory;
 
 // general queries
+- (NSMutableArray *)getObjectsWithEntity:(NSString *)entityName;
 - (NSMutableArray *)getObjectsWithCondition:(NSString *)condition
                                 sortingKeys:(NSArray *)skeys
                                      entity:(NSString *)entityName;
