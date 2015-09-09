@@ -1,0 +1,6 @@
+framework module JLCoreDataHelper {
+  umbrella header "JLCoreDataHelper-umbrella.h"
+
+  export *
+  module * { export * }
+}

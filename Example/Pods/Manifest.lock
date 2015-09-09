@@ -1,0 +1,14 @@
+PODS:
+  - JLCoreDataHelper (0.1.0)
+
+DEPENDENCIES:
+  - JLCoreDataHelper (from `../`)
+
+EXTERNAL SOURCES:
+  JLCoreDataHelper:
+    :path: ../
+
+SPEC CHECKSUMS:
+  JLCoreDataHelper: ebaa5ad70643874cc919b59c939dadc722e7c154
+
+COCOAPODS: 0.38.0
