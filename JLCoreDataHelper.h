@@ -24,8 +24,10 @@
 - (void)saveContext;
 - (NSURL *)applicationDocumentsDirectory;
 
-// general queries
+#pragma mark -get
 - (NSMutableArray *)getObjectsWithEntity:(NSString *)entityName;
+- (NSMutableArray *)getObjectsWithCondition:(NSString *)condition
+                                     entity:(NSString *)entityName;
 - (NSMutableArray *)getObjectsWithCondition:(NSString *)condition
                                 sortingKeys:(NSArray *)skeys
                                      entity:(NSString *)entityName;
@@ -33,16 +35,21 @@
                                 sortingKeys:(NSArray *)skeys
                                   ascending:(BOOL)ascending
                                      entity:(NSString *)entityName;
-- (void)set:(NSDictionary *)keyValue condition:(NSString *)condition entityName:(NSString *)entityName;
+
+#pragma mark -set, update
+- (id)set:(NSDictionary *)keyValue condition:(NSString *)condition entityName:(NSString *)entityName;
 - (void)update:(NSDictionary *)keyValue condition:(NSString *)condition entityName:(NSString *)entityName;
 
+#pragma mark -create
 - (id)create:(NSDictionary *)newValue entityName:(NSString *)entityName;
 - (id)createWithoutSaving:(NSDictionary *)newValue entityName:(NSString *)entityName;
+- (id)createForEntityName:(NSString *)entityName initBlock:(void(^)(id newObject))initBlock;
 
+#pragma mark -delete
 - (BOOL)deleteObject:(id)object;
 - (void)deleteAllObjectsForEntityName:(NSString *)entityName;
 
-// (for singleton entity)
+#pragma mark -singleton entity
 - (id)getFirstObjectWithAttributeName:(NSString *)attributeName
                            entityName:(NSString *)entityName;
 - (void)setFirstObject:(id)obj

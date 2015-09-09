@@ -14,6 +14,7 @@
 #endif
 
 #import "JLCoreDataHelper.h"
+#import <objc/runtime.h>
 
 @interface JLCoreDataHelper ()
 @property (strong, nonatomic) NSString *dataModelName;
@@ -49,6 +50,14 @@ static JLCoreDataHelper *instance = nil;
 - (NSMutableArray *)getObjectsWithEntity:(NSString *)entityName
 {
     return [self getObjectsWithCondition:nil
+                             sortingKeys:nil
+                               ascending:YES
+                                  entity:entityName];
+}
+- (NSMutableArray *)getObjectsWithCondition:(NSString *)condition
+                                     entity:(NSString *)entityName
+{
+    return [self getObjectsWithCondition:condition
                              sortingKeys:nil
                                ascending:YES
                                   entity:entityName];
@@ -105,7 +114,6 @@ static JLCoreDataHelper *instance = nil;
         {
             if ([resultList count] == 0)
             {
-                NSLog(@"%s: [%@] There is no result", __FUNCTION__, entityName);
                 return nil;
             }
         }
@@ -120,18 +128,21 @@ static JLCoreDataHelper *instance = nil;
 #pragma mark -set, update
 
 // create if not exists,
-// update first item if exists
-- (void)set:(NSDictionary *)keyValue condition:(NSString *)condition entityName:(NSString *)entityName
+// update (only) **FIRST** item if exists
+- (id)set:(NSDictionary *)keyValue condition:(NSString *)condition entityName:(NSString *)entityName
 {
     NSArray *arr = [self getObjectsWithCondition:condition sortingKeys:nil entity:entityName];
+    id obj = nil;
     if(arr.count == 0) {
-        [self create:keyValue entityName:entityName];
+        obj = [self create:keyValue entityName:entityName];
     }
     else {
-        id obj = arr[0];
+        obj = arr[0];
         [obj setValuesForKeysWithDictionary:keyValue];
     }
     [self saveContext];
+    
+    return obj;
 }
 
 // update all objs which matchs the condition in the entity
@@ -174,11 +185,28 @@ static JLCoreDataHelper *instance = nil;
                 }
             }
         }
-
     }
     @catch (NSException *e) {
         NSLog(@"Exception : %@", e);
     }
+    return obj;
+}
+- (id)createForEntityName:(NSString *)entityName initBlock:(void(^)(id newObject))initBlock
+{
+    id obj = nil;
+    @try {
+        obj = [NSEntityDescription insertNewObjectForEntityForName:entityName
+                                            inManagedObjectContext:self.managedObjectContext];
+        if(initBlock) {
+            initBlock(obj);
+        }
+    }
+    @catch (NSException *e) {
+        NSLog(@"Exception : %@", e);
+    }
+    
+    [self saveContext];
+    
     return obj;
 }
 
@@ -251,6 +279,25 @@ static JLCoreDataHelper *instance = nil;
               entityName:entityName];
 }
 
+#pragma mark - private methods
+
+- (NSDictionary *)dictionaryForObject:(id)obj
+{
+    unsigned int count = 0;
+    NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+    objc_property_t *properties = class_copyPropertyList([obj class], &count);
+    
+    for (NSInteger i=0; i<count; i++) {
+        NSString *key = [NSString stringWithUTF8String:property_getName(properties[i])];
+        id value = [obj valueForKey:key];
+        if (value) {
+            [dict setObject:value forKey:key];
+        }
+    }
+    free(properties);
+    
+    return dict;
+}
 
 #pragma mark - Core Data stack
 
