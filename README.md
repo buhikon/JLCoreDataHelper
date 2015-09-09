@@ -1,13 +1,6 @@
 # JLCoreDataHelper
 
 [![CI Status](http://img.shields.io/travis/Joey L./JLCoreDataHelper.svg?style=flat)](https://travis-ci.org/Joey L./JLCoreDataHelper)
-[![Version](https://img.shields.io/cocoapods/v/JLCoreDataHelper.svg?style=flat)](http://cocoapods.org/pods/JLCoreDataHelper)
-[![License](https://img.shields.io/cocoapods/l/JLCoreDataHelper.svg?style=flat)](http://cocoapods.org/pods/JLCoreDataHelper)
-[![Platform](https://img.shields.io/cocoapods/p/JLCoreDataHelper.svg?style=flat)](http://cocoapods.org/pods/JLCoreDataHelper)
-
-## Usage
-
-To run the example project, clone the repo, and run `pod install` from the Example directory first.
 
 ## Requirements
 
@@ -19,10 +12,6 @@ it, simply add the following line to your Podfile:
 ```ruby
 pod "JLCoreDataHelper"
 ```
-
-## Author
-
-Joey L.
 
 ## License
 
