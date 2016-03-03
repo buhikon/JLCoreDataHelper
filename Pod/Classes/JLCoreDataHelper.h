@@ -1,7 +1,7 @@
 //
 //  JLCoreDataHelper.h
 //
-//  Version 0.2.1
+//  Version 0.2.2
 //
 //  Created by Joey L. on 7/23/15.
 //  Copyright (c) 2015 Joey L. All rights reserved.
@@ -30,10 +30,12 @@ typedef NS_ENUM(NSInteger, JLCoreDataStoreType) {
 @interface JLCoreDataHelper : NSObject
 
 + (void)initializeWithDataModelName:(NSString *)dataModelName;
++ (void)initializeWithDataModelName:(NSString *)dataModelName
+                     saveFolderName:(NSString *)saveFolderName;
 + (void)setStoreType:(JLCoreDataStoreType)storeType forEntity:(NSString *)entityName;
-+ (JLCoreDataHelper *)sharedInstance;
 
-@property (readonly, strong, nonatomic) NSManagedObjectModel *managedObjectModel;
+
++ (JLCoreDataHelper *)sharedInstance;
 
 - (void)saveContext;
 - (NSURL *)applicationDocumentsDirectory;

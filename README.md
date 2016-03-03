@@ -21,8 +21,12 @@ pod "JLCoreDataHelper"
 ```
 #import <JLCoreDataHelper/JLCoreDataHelper.h>
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    [JLCoreDataHelper initializeWithDataModelName:@"Data Model file name here"];
+    [JLCoreDataHelper initializeWithDataModelName:@"Data Model file name here" saveFolderName:@"folder name"]; 
 }
+```
+4. It's possible to set a store type to a specific entity like below:
+```
+[JLCoreDataHelper setStoreType:JLCoreDataStoreTypeMemory forEntity:@"Entity Name"];
 ```
 
 ## Usage

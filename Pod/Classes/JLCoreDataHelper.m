@@ -1,7 +1,7 @@
 //
 //  JLCoreDataHelper.m
 //
-//  Version 0.2.1
+//  Version 0.2.2
 //
 //  Created by Joey L. on 7/23/15.
 //  Copyright (c) 2015 Joey L. All rights reserved.
@@ -17,7 +17,10 @@
 #import <objc/runtime.h>
 
 @interface JLCoreDataHelper ()
+@property (strong, nonatomic) NSURL *documentsDirectoryURL;
 @property (strong, nonatomic) NSString *dataModelName;
+@property (strong, nonatomic) NSString *saveFolderName;
+@property (readonly, strong, nonatomic) NSManagedObjectModel *managedObjectModel;
 @property (strong, nonatomic) NSMutableDictionary<NSString *, NSManagedObjectContext *> *managedObjectContextPool;
 @property (strong, nonatomic) NSMutableDictionary<NSString *, NSPersistentStoreCoordinator *> *persistentStoreCoordinatorPool;
 @property (strong, nonatomic) NSMutableDictionary<NSString *, NSString *> *entityStoreTypePool;
@@ -39,6 +42,14 @@ static JLCoreDataHelper *instance = nil;
         
         return instance;
     }
+}
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        self.dataModelName = @"CoreData";
+    }
+    return self;
 }
 
 #pragma mark - accessor
@@ -71,7 +82,13 @@ static JLCoreDataHelper *instance = nil;
 
 + (void)initializeWithDataModelName:(NSString *)dataModelName
 {
+    [JLCoreDataHelper initializeWithDataModelName:dataModelName saveFolderName:nil];
+}
++ (void)initializeWithDataModelName:(NSString *)dataModelName
+                     saveFolderName:(NSString *)saveFolderName
+{
     [JLCoreDataHelper sharedInstance].dataModelName = dataModelName;
+    [JLCoreDataHelper sharedInstance].saveFolderName = saveFolderName;
 }
 + (void)setStoreType:(JLCoreDataStoreType)storeType forEntity:(NSString *)entityName {
 
@@ -369,7 +386,44 @@ static JLCoreDataHelper *instance = nil;
 
 - (NSURL *)applicationDocumentsDirectory {
     // The directory the application uses to store the Core Data store file. This code uses an application directory in the application's documents directory.
-    return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+    if(!self.documentsDirectoryURL) {
+        NSURL *URL = [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+        if(self.saveFolderName.length > 0) {
+            NSString *path = [URL.path stringByAppendingPathComponent:self.saveFolderName];
+            [self createDirectoryIfNotExist:path];
+            URL = [NSURL fileURLWithPath:path];
+        }
+        self.documentsDirectoryURL = URL;
+    }
+    return self.documentsDirectoryURL;
+}
+
+- (BOOL)createDirectoryIfNotExist:(NSString *)path
+{
+    BOOL isDirectory = YES;
+    BOOL exist = [[NSFileManager defaultManager] fileExistsAtPath: path
+                                                      isDirectory: &isDirectory];
+    if(!exist) {
+        
+        NSDictionary *dictoryPermission = [NSDictionary dictionaryWithObjectsAndKeys:
+                                           [NSDate date],NSFileModificationDate,
+                                           @"owner",@"NSFileOwnerAccountName",
+                                           @"group",@"NSFileGroupOwnerAccountName",
+                                           nil,@"NSFilePosixPermissions",
+                                           [NSNumber numberWithBool:YES],@"NSFileExtensionHidden",
+                                           nil];
+        
+        BOOL createDirectory = [[NSFileManager defaultManager] createDirectoryAtPath:path
+                                                         withIntermediateDirectories:NO
+                                                                          attributes:dictoryPermission
+                                                                               error:nil];
+        
+        if(!createDirectory) {
+            NSLog(@"failed to create directory !! [%@]", path);
+            return NO;
+        }
+    }
+    return YES;
 }
 
 - (NSManagedObjectModel *)managedObjectModel {
