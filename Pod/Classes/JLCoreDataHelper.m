@@ -1,7 +1,7 @@
 //
 //  JLCoreDataHelper.m
 //
-//  Version 1.0.0
+//  Version 0.2.0
 //
 //  Created by Joey L. on 7/23/15.
 //  Copyright (c) 2015 Joey L. All rights reserved.
@@ -18,6 +18,9 @@
 
 @interface JLCoreDataHelper ()
 @property (strong, nonatomic) NSString *dataModelName;
+@property (strong, nonatomic) NSMutableDictionary<NSString *, NSManagedObjectContext *> *managedObjectContextPool;
+@property (strong, nonatomic) NSMutableDictionary<NSString *, NSPersistentStoreCoordinator *> *persistentStoreCoordinatorPool;
+@property (strong, nonatomic) NSMutableDictionary<NSString *, NSString *> *entityStoreTypePool;
 @end
 
 @implementation JLCoreDataHelper
@@ -38,11 +41,70 @@ static JLCoreDataHelper *instance = nil;
     }
 }
 
+#pragma mark - accessor
+
+- (NSMutableDictionary<NSString *, NSManagedObjectContext *> *)managedObjectContextPool
+{
+    if(!_managedObjectContextPool) {
+        _managedObjectContextPool = [[NSMutableDictionary<NSString *, NSManagedObjectContext *> alloc] init];
+    }
+    return _managedObjectContextPool;
+}
+
+- (NSMutableDictionary<NSString *, NSPersistentStoreCoordinator *> *)persistentStoreCoordinatorPool
+{
+    if(!_persistentStoreCoordinatorPool) {
+        _persistentStoreCoordinatorPool = [[NSMutableDictionary<NSString *, NSPersistentStoreCoordinator *> alloc] init];
+    }
+    return _persistentStoreCoordinatorPool;
+}
+
+- (NSMutableDictionary<NSString *, NSString *> *)entityStoreTypePool
+{
+    if(!_entityStoreTypePool) {
+        _entityStoreTypePool = [[NSMutableDictionary<NSString *, NSString *> alloc] init];
+    }
+    return _entityStoreTypePool;
+}
+
 #pragma mark - public methods
 
 + (void)initializeWithDataModelName:(NSString *)dataModelName
 {
     [JLCoreDataHelper sharedInstance].dataModelName = dataModelName;
+}
++ (void)setStoreType:(JLCoreDataStoreType)storeType forEntity:(NSString *)entityName {
+
+    NSString *storeTypeStr = nil;
+    switch (storeType) {
+        case JLCoreDataStoreTypeSQLite: {
+            storeTypeStr = NSSQLiteStoreType;
+            break;
+        }
+#ifdef JLCOREDATAHELPER_MACOS
+        case JLCoreDataStoreTypeXML: {
+            storeTypeStr = NSXMLStoreType;
+            break;
+        }
+#endif
+        case JLCoreDataStoreTypeBinary: {
+            storeTypeStr = NSBinaryStoreType;
+            break;
+        }
+        case JLCoreDataStoreTypeMemory: {
+            storeTypeStr = NSInMemoryStoreType;
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    
+    
+    if(entityName.length > 0 && storeTypeStr.length > 0) {
+        [[JLCoreDataHelper sharedInstance].entityStoreTypePool setObject:storeTypeStr forKey:entityName];
+    }
+    
 }
 
 #pragma mark -get
@@ -81,7 +143,7 @@ static JLCoreDataHelper *instance = nil;
     {
         NSFetchRequest *retrieveRequest = [[NSFetchRequest alloc] init];
         
-        NSEntityDescription *entity = [NSEntityDescription entityForName:entityName inManagedObjectContext:[self managedObjectContext]];
+        NSEntityDescription *entity = [NSEntityDescription entityForName:entityName inManagedObjectContext:[self managedObjectContextForEntity:entityName]];
         
         retrieveRequest.entity = entity;
         
@@ -101,7 +163,7 @@ static JLCoreDataHelper *instance = nil;
             [retrieveRequest setSortDescriptors:sortDescriptors];
         }
         
-        resultList = [[self executeFetch:retrieveRequest] mutableCopy];
+        resultList = [[self executeFetch:retrieveRequest entity:entityName] mutableCopy];
         //		[retrieveRequest release];
         retrieveRequest = nil;
         
@@ -140,7 +202,7 @@ static JLCoreDataHelper *instance = nil;
         obj = arr[0];
         [obj setValuesForKeysWithDictionary:keyValue];
     }
-    [self saveContext];
+    [self saveContextForEntity:entityName];
     
     return obj;
 }
@@ -153,7 +215,7 @@ static JLCoreDataHelper *instance = nil;
         for (id obj in arr) {
             [obj setValuesForKeysWithDictionary:keyValue];
         }
-        [self saveContext];
+        [self saveContextForEntity:entityName];
     }
 }
 
@@ -162,7 +224,7 @@ static JLCoreDataHelper *instance = nil;
 - (id)create:(NSDictionary *)newValue entityName:(NSString *)entityName
 {
     id obj = [self createWithoutSaving:newValue entityName:entityName];
-    [self saveContext];
+    [self saveContextForEntity:entityName];
     return obj;
     
 }
@@ -171,7 +233,7 @@ static JLCoreDataHelper *instance = nil;
     id obj = nil;
     @try {
         obj = [NSEntityDescription insertNewObjectForEntityForName:entityName
-                                            inManagedObjectContext:self.managedObjectContext];
+                                            inManagedObjectContext:[self managedObjectContextForEntity:entityName]];
         
         if (newValue != nil) {
             NSEnumerator *enumerator = [newValue keyEnumerator];
@@ -196,7 +258,7 @@ static JLCoreDataHelper *instance = nil;
     id obj = nil;
     @try {
         obj = [NSEntityDescription insertNewObjectForEntityForName:entityName
-                                            inManagedObjectContext:self.managedObjectContext];
+                                            inManagedObjectContext:[self managedObjectContextForEntity:entityName]];
         if(initBlock) {
             initBlock(obj);
         }
@@ -205,7 +267,7 @@ static JLCoreDataHelper *instance = nil;
         NSLog(@"Exception : %@", e);
     }
     
-    [self saveContext];
+    [self saveContextForEntity:entityName];
     
     return obj;
 }
@@ -214,27 +276,29 @@ static JLCoreDataHelper *instance = nil;
 
 - (BOOL)deleteObject:(id)object
 {
-    @try {
-        [self.managedObjectContext deleteObject:object];
-        [self saveContext];
-    }
-    @catch (NSException *e) {
-        NSLog(@"Exception : %@", e);
+    for (NSManagedObjectContext *managedObjectContext in self.managedObjectContextPool) {
+        @try {
+            [managedObjectContext deleteObject:object];
+            [self saveContextForManagedObjectContext:managedObjectContext];
+        }
+        @catch (NSException *e) {
+            NSLog(@"Exception : %@", e);
+        }
     }
 }
 - (void)deleteAllObjectsForEntityName:(NSString *)entityName {
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
     NSEntityDescription *entity = [NSEntityDescription entityForName:entityName
-                                              inManagedObjectContext:self.managedObjectContext];
+                                              inManagedObjectContext:[self managedObjectContextForEntity:entityName]];
     fetchRequest.entity = entity;
     
-    NSArray *items = [self executeFetch:fetchRequest];
+    NSArray *items = [self executeFetch:fetchRequest entity:entityName];
     fetchRequest = nil;
     
     for (NSManagedObject *managedObject in items) {
-        [[self managedObjectContext] deleteObject:managedObject];
+        [[self managedObjectContextForEntity:entityName] deleteObject:managedObject];
     }
-    [self saveContext];
+    [self saveContextForEntity:entityName];
 }
 
 #pragma mark -singleton entity
@@ -262,7 +326,7 @@ static JLCoreDataHelper *instance = nil;
         if(arr.count > 0) {
             id objInArr = arr[0];
             [objInArr setValue:obj forKey:attibuteName];
-            [self saveContext];
+            [self saveContextForEntity:entityName];
         }
         else {
             // create single object (when first access)
@@ -301,9 +365,7 @@ static JLCoreDataHelper *instance = nil;
 
 #pragma mark - Core Data stack
 
-@synthesize managedObjectContext = _managedObjectContext;
 @synthesize managedObjectModel = _managedObjectModel;
-@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
 
 - (NSURL *)applicationDocumentsDirectory {
     // The directory the application uses to store the Core Data store file. This code uses an application directory in the application's documents directory.
@@ -320,22 +382,20 @@ static JLCoreDataHelper *instance = nil;
     return _managedObjectModel;
 }
 
-- (NSPersistentStoreCoordinator *)persistentStoreCoordinator {
+// * storeType : NSSQLiteStoreType, NSXMLStoreType, NSBinaryStoreType, NSInMemoryStoreType
+- (NSPersistentStoreCoordinator *)createPersistentStoreCoordinatorForStoreType:(NSString *)storeType {
     // The persistent store coordinator for the application. This implementation creates and return a coordinator, having added the store for the application to it.
-    if (_persistentStoreCoordinator != nil) {
-        return _persistentStoreCoordinator;
-    }
     
     // Create the coordinator and store
     
-    _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
+    NSPersistentStoreCoordinator *persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
     NSURL *storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.sqlite", self.dataModelName]];
     NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
                              [NSNumber numberWithBool:YES], NSMigratePersistentStoresAutomaticallyOption,
                              [NSNumber numberWithBool:YES], NSInferMappingModelAutomaticallyOption,
                              nil];
     NSError *error = nil;
-    if (![_persistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType
+    if (![persistentStoreCoordinator addPersistentStoreWithType:storeType
                                                    configuration:nil
                                                              URL:storeURL
                                                          options:options
@@ -352,29 +412,72 @@ static JLCoreDataHelper *instance = nil;
         abort();
     }
     
-    return _persistentStoreCoordinator;
+    return persistentStoreCoordinator;
 }
 
-
-- (NSManagedObjectContext *)managedObjectContext {
+// * storeType : NSSQLiteStoreType, NSXMLStoreType, NSBinaryStoreType, NSInMemoryStoreType
+- (NSManagedObjectContext *)createManagedObjectContextForStoreType:(NSString *)storeType {
     // Returns the managed object context for the application (which is already bound to the persistent store coordinator for the application.)
-    if (_managedObjectContext != nil) {
-        return _managedObjectContext;
-    }
-    
-    NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinator];
+
+    NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinatorForStoreType:storeType];
     if (!coordinator) {
         return nil;
     }
-    _managedObjectContext = [[NSManagedObjectContext alloc] init];
-    [_managedObjectContext setPersistentStoreCoordinator:coordinator];
-    return _managedObjectContext;
+    NSManagedObjectContext *managedObjectContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    [managedObjectContext setPersistentStoreCoordinator:coordinator];
+    return managedObjectContext;
 }
+
+#pragma mark -
+
+- (NSString *)storeTypeForEntity:(NSString *)entityName {
+    
+    NSString *storeType = self.entityStoreTypePool[entityName];
+    if(!storeType) {
+        storeType = NSSQLiteStoreType;
+    }
+    return storeType;
+}
+
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinatorForEntity:(NSString *)entityName {
+    NSString *storeType = [self storeTypeForEntity:entityName];
+    return [self persistentStoreCoordinatorForStoreType:storeType];
+}
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinatorForStoreType:(NSString *)storeType {
+    NSPersistentStoreCoordinator *persistentStoreCoordinator = [self.persistentStoreCoordinatorPool objectForKey:storeType];
+    if(!persistentStoreCoordinator) {
+        persistentStoreCoordinator = [self createPersistentStoreCoordinatorForStoreType:storeType];
+        [self.persistentStoreCoordinatorPool setObject:persistentStoreCoordinator forKey:storeType];
+    }
+    return persistentStoreCoordinator;
+}
+- (NSManagedObjectContext *)managedObjectContextForEntity:(NSString *)entityName {
+    NSString *storeType = [self storeTypeForEntity:entityName];
+    return [self managedObjectContextForStoreType:storeType];
+}
+- (NSManagedObjectContext *)managedObjectContextForStoreType:(NSString *)storeType {
+    NSManagedObjectContext *managedObjectContext = [self.managedObjectContextPool objectForKey:storeType];
+    if(!managedObjectContext) {
+        managedObjectContext = [self createManagedObjectContextForStoreType:storeType];
+        [self.managedObjectContextPool setObject:managedObjectContext forKey:storeType];
+    }
+    return managedObjectContext;
+}
+
 
 #pragma mark - Core Data Saving support
 
 - (void)saveContext {
-    NSManagedObjectContext *managedObjectContext = self.managedObjectContext;
+    for (NSManagedObjectContext *managedObjectContext in self.managedObjectContextPool) {
+        [self saveContextForManagedObjectContext:managedObjectContext];
+    }
+}
+
+- (void)saveContextForEntity:(NSString *)entityName {
+    NSManagedObjectContext *managedObjectContext = [self managedObjectContextForEntity:entityName];
+    [self saveContextForManagedObjectContext:managedObjectContext];
+}
+- (void)saveContextForManagedObjectContext:(NSManagedObjectContext *)managedObjectContext {
     if (managedObjectContext != nil) {
         NSError *error = nil;
         @synchronized(self) {
@@ -388,16 +491,16 @@ static JLCoreDataHelper *instance = nil;
     }
 }
 
--(void)rollback {
-    [[self managedObjectContext] rollback];
-}
+//-(void)rollback {
+//    [[self managedObjectContext] rollback];
+//}
 
--(NSArray *)executeFetch:(NSFetchRequest *)fetchRequest {
+-(NSArray *)executeFetch:(NSFetchRequest *)fetchRequest entity:(NSString *)entityName {
     NSError *error = nil;
     @try {
-        [self.persistentStoreCoordinator lock];
-        NSArray *items = [[self managedObjectContext] executeFetchRequest:fetchRequest error:&error];
-        [self.persistentStoreCoordinator unlock];
+        [[self persistentStoreCoordinatorForEntity:entityName] lock];
+        NSArray *items = [[self managedObjectContextForEntity:entityName] executeFetchRequest:fetchRequest error:&error];
+        [[self persistentStoreCoordinatorForEntity:entityName] unlock];
         
         return items;
     }
