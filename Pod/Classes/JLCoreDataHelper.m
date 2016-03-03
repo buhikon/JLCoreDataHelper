@@ -1,7 +1,7 @@
 //
 //  JLCoreDataHelper.m
 //
-//  Version 0.2.0
+//  Version 0.2.1
 //
 //  Created by Joey L. on 7/23/15.
 //  Copyright (c) 2015 Joey L. All rights reserved.
